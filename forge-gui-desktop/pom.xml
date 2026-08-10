@@ -315,6 +315,11 @@ try {
         </dependency>
         <dependency>
             <groupId>forge</groupId>
+            <artifactId>forge-external-ai</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>forge</groupId>
             <artifactId>forge-gui</artifactId>
             <version>${project.version}</version>
         </dependency>
