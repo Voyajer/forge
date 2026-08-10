@@ -22,6 +22,7 @@ Advisor:Advisors
 Aetherborn:Aetherborn
 Alien:Aliens
 Ally:Allies
+Andorian:Andorians
 Angel:Angels
 Antelope:Antelopes
 Ape:Apes
@@ -58,6 +59,7 @@ Bringer:Bringers
 Brushwagg:Brushwaggs
 Camarid:Camarids
 C'tan:C'tan
+Caitian:Caitians
 Camel:Camels
 Capybara:Capybaras
 Caribou:Caribous
@@ -130,6 +132,7 @@ Goblin:Goblins
 God:Gods
 Golem:Golems
 Gorgon:Gorgons
+Gorn:Gorns
 Graveborn:Graveborn
 Gremlin:Gremlins
 Griffin:Griffins
@@ -172,6 +175,7 @@ Kraken:Krakens
 Kree:Kree
 Lamia:Lamias
 Lammasu:Lammasus
+Lanthanite:Lanthanites
 Leech:Leeches
 Lemur:Lemurs
 Leviathan:Leviathans
@@ -306,9 +310,12 @@ Surrakar:Surrakars
 Symbiote:Symbiotes
 Synth:Synths
 Survivor:Survivors
+Talosian:Talosians
+Tellarite:Tellarites
 Tentacle:Tentacles
 Tetravite:Tetravites
 Thalakos:Thalakoses
+Tholian:Tholians
 Thopter:Thopters
 Thrull:Thrulls
 Tiefling:Tieflings
@@ -328,6 +335,7 @@ Varmint:Varmints
 Vedalken:Vedalkens
 Villain:Villains
 Volver:Volvers
+Vorta:Vorta
 Vulcan:Vulcans
 Wall:Walls
 Warlock:Warlocks
@@ -343,6 +351,7 @@ Wombat:Wombats
 Worm:Worms
 Wraith:Wraiths
 Wurm:Wurms
+Xindi:Xindi
 Yeti:Yetis
 Zombie:Zombies
 Zubera:Zuberas
