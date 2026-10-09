@@ -26,6 +26,7 @@ import com.google.common.base.Suppliers;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
 import forge.game.card.Card;
+import forge.game.mana.ManaCostBeingPaid;
 import forge.game.player.Player;
 import forge.game.player.PlayerController;
 import org.tinylog.Logger;
@@ -51,8 +52,7 @@ public class AiCardMemory {
      * (which, in its turn, defines how the AI utilizes the information
      * about remembered cards).
      */
-    public enum MemorySet {
-        MANDATORY_ATTACKERS, // These creatures must attack this turn
+    public enum MemorySet implements MemoryType<Card> {
         TRICK_ATTACKERS, // These creatures will attack to try to provoke the opponent to block them into a combat trick
         HELD_MANA_SOURCES_FOR_MAIN2, // These mana sources will not be used before Main 2
         HELD_MANA_SOURCES_FOR_DECLBLK, // These mana sources will not be used before Combat - Declare Blockers
@@ -67,13 +67,20 @@ public class AiCardMemory {
         REVEALED_CARDS // These cards were recently revealed to the AI by a call to PlayerControllerAi.reveal
     }
 
-    private final Supplier<Map<MemorySet, Set<Card>>> memoryMap = Suppliers.memoize(Maps::newConcurrentMap);
+    public enum MemorySetMana implements MemoryType<ManaCostBeingPaid> {
+        UNPAID_COSTS // all partial costs AI couldn't pay, stored globally so individual effects don't need to run expensive checks themselves
+    }
+
+    public interface MemoryType<T> {
+    }
+
+    private final Supplier<Map<MemoryType, Set>> memoryMap = Suppliers.memoize(Maps::newConcurrentMap);
 
     public AiCardMemory() {
     }
 
-    private Set<Card> getMemorySet(MemorySet set) {
-        return memoryMap.get().computeIfAbsent(set, value -> Sets.newConcurrentHashSet());
+    private <T> Set<T> getMemorySet(MemoryType<T> set) {
+        return (Set<T>) memoryMap.get().computeIfAbsent(set, value -> Sets.newConcurrentHashSet());
     }
 
     /**
@@ -185,14 +192,14 @@ public class AiCardMemory {
      * @param set the memory set to inspect.
      * @return true, if the given memory set contains no remembered cards.
      */
-    public boolean isMemorySetEmpty(MemorySet set) {
+    public boolean isMemorySetEmpty(MemoryType set) {
         return set == null || getMemorySet(set).isEmpty();
     }
     
     /**
      * Clears the given memory set.
      */
-    public void clearMemorySet(MemorySet set) {
+    public void clearMemorySet(MemoryType set) {
         if (set != null) {
             getMemorySet(set).clear();
         }
@@ -202,7 +209,7 @@ public class AiCardMemory {
      * Clears all memory sets stored in this card memory for the given player.
      */
     public void clearAllRemembered() {
-        for (MemorySet memSet : MemorySet.values()) {
+        for (MemoryType memSet : memoryMap.get().keySet()) {
             clearMemorySet(memSet);
         }
     }
@@ -228,7 +235,7 @@ public class AiCardMemory {
         return ((PlayerControllerAi) controller).getAi();
     }
 
-    public static Set<Card> getMemorySet(Player ai, MemorySet set) {
+    public static <T> Set<T> getMemorySet(Player ai, MemoryType<T> set) {
         AiController aic = getAiBrain(ai);
         if (aic == null) {
             return null;

@@ -16,8 +16,6 @@ import org.robovm.apple.foundation.NSProcessInfo;
 import org.robovm.apple.uikit.UIApplication;
 import org.robovm.apple.uikit.UIPasteboard;
 import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileOutputStream;
 
 import com.badlogic.gdx.ApplicationListener;
 import com.badlogic.gdx.Gdx;
@@ -95,86 +93,6 @@ public class Main extends IOSApplication.Delegate {
 
     private static int createAppCounter = 0;
 
-    private void copyEssentialResources(final String assetsDir) {
-        log("copyEssentialResources() starting");
-        try {
-            String bundlePath = NSBundle.getMainBundle().getBundlePath();
-            File bundleResDir = new File(bundlePath, "res");
-
-            log("Bundle res dir: " + bundleResDir.getAbsolutePath());
-
-            if (bundleResDir.exists() && bundleResDir.isDirectory()) {
-                // Copy essential small resource directories to avoid watchdog timeout
-
-                // Copy languages directory (9 small files)
-                File bundleLangDir = new File(bundleResDir, "languages");
-                File docsLangDir = new File(assetsDir + "/res", "languages");
-
-                if (bundleLangDir.exists() && !docsLangDir.exists()) {
-                    log("Copying languages directory...");
-                    copyDirectory(bundleLangDir, docsLangDir);
-                    log("Languages copied successfully");
-                } else if (docsLangDir.exists()) {
-                    log("Languages directory already exists");
-                } else {
-                    log("Languages directory not found in bundle");
-                }
-
-                // Copy defaults directory (placeholder images like no_card.jpg)
-                File bundleDefaultsDir = new File(bundleResDir, "defaults");
-                File docsDefaultsDir = new File(assetsDir + "/res", "defaults");
-
-                if (bundleDefaultsDir.exists() && !docsDefaultsDir.exists()) {
-                    log("Copying defaults directory...");
-                    copyDirectory(bundleDefaultsDir, docsDefaultsDir);
-                    log("Defaults copied successfully");
-                } else if (docsDefaultsDir.exists()) {
-                    log("Defaults directory already exists");
-                } else {
-                    log("Defaults directory not found in bundle");
-                }
-            } else {
-                log("No bundled resources found at: " + bundleResDir.getAbsolutePath());
-            }
-        } catch (Exception e) {
-            log("Error copying essential resources: " + e.getMessage());
-            e.printStackTrace();
-        }
-    }
-
-    private void copyFile(final File source, final File dest) throws IOException {
-        try (FileInputStream fis = new FileInputStream(source);
-             FileOutputStream fos = new FileOutputStream(dest)) {
-            byte[] buffer = new byte[8192];
-            int length;
-            while ((length = fis.read(buffer)) > 0) {
-                fos.write(buffer, 0, length);
-            }
-        }
-    }
-
-    private void copyDirectory(final File source, final File dest) throws IOException {
-        if (!dest.exists()) {
-            dest.mkdirs();
-        }
-
-        File[] files = source.listFiles();
-        if (files != null) {
-            for (File file : files) {
-                File destFile = new File(dest, file.getName());
-                if (file.isDirectory()) {
-                    copyDirectory(file, destFile);
-                } else {
-                    // Only copy if destination doesn't exist (don't overwrite user changes)
-                    if (!destFile.exists()) {
-                        copyFile(file, destFile);
-                        log("Copied " + file.getName());
-                    }
-                }
-            }
-        }
-    }
-
     @Override
     protected IOSApplication createApplication() {
         synchronized (initLock) {
@@ -200,40 +118,6 @@ public class Main extends IOSApplication.Delegate {
             // cuts allocations + speeds up AI evaluation — helps the constrained iPad CPU (fewer combat
             // timeouts) and the jetsam memory ceiling. Set here, before any game/CardState class loads.
             System.setProperty("forge.staticMemo", "on");
-
-            // Clear card cache when a new build is deployed. The cache stores
-            // pre-parsed card rules for fast startup, but stale caches cause bugs
-            // (e.g., duplicate triggers). Compare the app's CFBundleVersion to a
-            // stored marker — if they differ, this is a new deploy.
-            String appBuild = NSBundle.getMainBundle().getInfoDictionaryObject("CFBundleVersion").toString();
-            File cacheDir = new File(documentsPath + "cache/db/");
-            cacheDir.mkdirs();
-            File buildMarker = new File(cacheDir, ".build_version");
-            String cachedBuild = "";
-            if (buildMarker.exists()) {
-                try {
-                    byte[] bytes = new byte[(int) buildMarker.length()];
-                    FileInputStream fis = new FileInputStream(buildMarker);
-                    fis.read(bytes);
-                    fis.close();
-                    cachedBuild = new String(bytes).trim();
-                } catch (IOException e) { /* treat as mismatch */ }
-            }
-            if (!appBuild.equals(cachedBuild)) {
-                File cardCache = new File(cacheDir, "cardcache.bin");
-                File cardsDb = new File(cacheDir, "cardsdb.bin");
-                if (cardCache.exists()) { cardCache.delete(); log("Cleared stale cardcache.bin (build " + cachedBuild + " -> " + appBuild + ")"); }
-                if (cardsDb.exists()) { cardsDb.delete(); log("Cleared stale cardsdb.bin"); }
-                try {
-                    FileOutputStream fos = new FileOutputStream(buildMarker);
-                    fos.write(appBuild.getBytes());
-                    fos.close();
-                } catch (IOException e) {
-                    log("Could not write build marker: " + e.getMessage());
-                }
-            } else {
-                log("Card cache up-to-date for build " + appBuild);
-            }
 
             final IOSApplicationConfiguration config = new IOSApplicationConfiguration();
             config.useAccelerometer = false;

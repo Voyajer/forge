@@ -12,6 +12,7 @@ import forge.assets.*;
 import forge.game.GameLogEntryType;
 import forge.game.GameLogVerbosity;
 import forge.gui.GuiBase;
+import forge.gui.download.CdnUuidCache;
 import forge.localinstance.properties.ForgeConstants;
 import forge.localinstance.properties.ForgeNetPreferences;
 import forge.localinstance.properties.ForgePreferences;
@@ -322,6 +323,13 @@ public class SettingsPage extends TabPage<SettingsScreen> {
                     Forge.animatedCardTapUntap = FModel.getPreferences().getPrefBoolean(FPref.UI_ANIMATED_CARD_TAPUNTAP);
                 }
             }, 1);
+        lstSettings.addItem(new CustomSelectSetting(FPref.UI_CARD_PLAY_ANIMATION_STYLE,
+            Forge.getLocalizer().getMessageorUseDefault("lblCardPlayOption", "Card Play Animation Style"),
+            Forge.getLocalizer().getMessageorUseDefault("nlCardPlayOption", "How cards animate when entering the battlefield."),
+            new String[] { "Rotate", "Slide", "Popup", "Off" }), 1);
+        lstSettings.addItem(new BooleanSetting(FPref.UI_COIN_DICE_ANIMATION,
+            Forge.getLocalizer().getMessageorUseDefault("lblCoinDiceAnimation", "Coin/Dice Animation"),
+            Forge.getLocalizer().getMessageorUseDefault("nlCoinDiceAnimation", "Enables Coin and Dice Animation.")), 1);
         lstSettings.addItem(new BooleanSetting(FPref.UI_STACK_CREATURES,
             Forge.getLocalizer().getMessage("cbStackCreatures"),
             Forge.getLocalizer().getMessage("nlStackCreatures")), 1);
@@ -401,9 +409,9 @@ public class SettingsPage extends TabPage<SettingsScreen> {
                     g.drawText(display, font, color, x, y, w, h, false, Align.right, false);
                 }
             }, 3);
-        lstSettings.addItem(new BooleanSetting(FPref.LOAD_CARD_SCRIPTS_LAZILY,
+        /*lstSettings.addItem(new BooleanSetting(FPref.LOAD_CARD_SCRIPTS_LAZILY,
             Forge.getLocalizer().getMessage("cbLoadCardsLazily"),
-            Forge.getLocalizer().getMessage("nlLoadCardsLazily")), 3);
+            Forge.getLocalizer().getMessage("nlLoadCardsLazily")), 3);*/ //
         lstSettings.addItem(new BooleanSetting(FPref.LOAD_ARCHIVED_FORMATS,
             Forge.getLocalizer().getMessage("cbLoadArchivedFormats"),
             Forge.getLocalizer().getMessage("nlLoadArchivedFormats")), 3);
@@ -507,6 +515,25 @@ public class SettingsPage extends TabPage<SettingsScreen> {
         lstSettings.addItem(new BooleanSetting(FPref.UI_ENABLE_ONLINE_IMAGE_FETCHER,
             Forge.getLocalizer().getMessage("cbImageFetcher"),
             Forge.getLocalizer().getMessage("nlImageFetcher")), 4);
+        final Map<String, String> cardLangMapping = ForgeConstants.getScryfallCardLanguageMapping();
+        lstSettings.addItem(new CustomSelectSetting(FPref.UI_CARD_DOWNLOAD_LANG, "Card art language",
+                "Preferred language for downloaded card images",
+                cardLangMapping.values()) {
+            @Override
+            public void valueChanged(String newValue) {
+                super.valueChanged(newValue);
+                applyPreferredLanguageAvailability();
+            }
+        }, 4);
+        lstSettings.addItem(new BooleanSetting(FPref.UI_PREFER_LANG_FOR_UNIQUE_CARDS,
+                "Prefer language for unique cards",
+                "When enabled, prioritizes cards available in the selected language for unique art") {
+            @Override
+            public void select() {
+                super.select();
+                applyPreferredLanguageAvailability();
+            }
+        }, 4);
         lstSettings.addItem(new CustomSelectSetting(FPref.UI_PREFERRED_ART,
             Forge.getLocalizer().getMessage("lblPreferredArt"),
             Forge.getLocalizer().getMessage("nlPreferredArt"),
@@ -649,9 +676,10 @@ public class SettingsPage extends TabPage<SettingsScreen> {
         lstSettings.addItem(new BooleanSetting(FPref.UI_OVERLAY_ABILITY_ICONS,
             Forge.getLocalizer().getMessage("lblShowAbilityIconsOverlays"),
             Forge.getLocalizer().getMessage("nlShowAbilityIconsOverlays")), 5);
-        lstSettings.addItem(new BooleanSetting(FPref.UI_USE_LASER_ARROWS,
-            Forge.getLocalizer().getMessage("lblUseLaserArrows"),
-            Forge.getLocalizer().getMessage("nlUseLaserArrows")), 5);
+        lstSettings.addItem(new CustomSelectSetting(FPref.UI_ARROW_OPTION,
+            Forge.getLocalizer().getMessage("lblLaserArrowsOption"),
+            Forge.getLocalizer().getMessage("nlLaserArrowsOption"),
+            new String[] { "Default", "Point", "Line" }), 5);
 
         // VIBRATION OPTIONS TAB
         Map<String, String> intensityOptions = new LinkedHashMap<>();
@@ -717,6 +745,11 @@ public class SettingsPage extends TabPage<SettingsScreen> {
                     SoundSystem.instance.changeBackgroundTrack();
                 }
             }, 7);
+        if (!GuiBase.isAndroid() && !GuiBase.isIOS()) {
+            lstSettings.addItem(new BooleanSetting(FPref.UI_PAUSE_MUSIC_ON_FOCUS_LOSS,
+                Forge.getLocalizer().getMessage("cbPauseMusicOnFocusLoss"),
+                Forge.getLocalizer().getMessage("nlPauseMusicOnFocusLoss")), 7);
+        }
         /*lstSettings.addItem(new BooleanSetting(FPref.UI_ALT_SOUND_SYSTEM,
             "Use Alternate Sound System",
             "Use the alternate sound system (only use if you have issues with sound not playing or disappearing)."), 7);*/
@@ -741,6 +774,16 @@ public class SettingsPage extends TabPage<SettingsScreen> {
 
     public void refreshCJKFontsList() {
         settingCJKFonts.updateOptions(FSkinFont.getAllCJKFonts());
+    }
+
+    private void applyPreferredLanguageAvailability() {
+        String langCode = FModel.getPreferences().getPref(FPref.UI_CARD_DOWNLOAD_LANG);
+        boolean preferForUnique = FModel.getPreferences().getPrefBoolean(FPref.UI_PREFER_LANG_FOR_UNIQUE_CARDS);
+        if (!preferForUnique || langCode == null || langCode.isEmpty() || "en".equalsIgnoreCase(langCode)) {
+            FModel.getMagicDb().setPreferredLanguageAvailability(null);
+        } else {
+            FModel.getMagicDb().setPreferredLanguageAvailability((setCode, cn) -> CdnUuidCache.isAvailableInLanguage(setCode, cn, langCode));
+        }
     }
 
     private void applySearch() {
