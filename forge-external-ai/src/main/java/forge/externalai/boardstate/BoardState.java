@@ -49,6 +49,13 @@ public class BoardState {
     @JsonProperty("stack")
     private List<CardInfo> stack = new ArrayList<>();
 
+    /**
+     * Total number of spells cast this turn by ALL players (the Storm count).
+     * Sourced from {@code MagicStack.getSpellsCastThisTurn().size()}.
+     */
+    @JsonProperty("spells_cast_this_turn")
+    private int spellsCastThisTurn;
+
     public BoardState() {
     }
 
@@ -108,6 +115,14 @@ public class BoardState {
         this.stack = stack;
     }
 
+    public int getSpellsCastThisTurn() {
+        return spellsCastThisTurn;
+    }
+
+    public void setSpellsCastThisTurn(int spellsCastThisTurn) {
+        this.spellsCastThisTurn = spellsCastThisTurn;
+    }
+
     /**
      * Player-specific state visible to the focal player.
      */
@@ -159,11 +174,32 @@ public class BoardState {
         @JsonProperty("sideboard_size")
         private int sideboardSize;
 
+        @JsonProperty("mulligan_count")
+        private int mulliganCount;
+
+        /**
+         * Number of spells THIS player cast this turn. Sourced from
+         * {@code Player.getSpellsCastThisTurn()}.
+         */
+        @JsonProperty("spells_cast_this_turn")
+        private int spellsCastThisTurn;
+
         @JsonProperty("hand_hidden")
         private boolean handHidden;
 
         @JsonProperty("is_focal")
         private boolean isFocal;
+
+        @JsonProperty("opponent_id")
+        private String opponentId;
+
+        /**
+         * The focal player's full decklist (main + sideboard), serialized as
+         * card info so the AI can see every card it might draw. Only populated
+         * for the focal player; empty for opponents.
+         */
+        @JsonProperty("decklist")
+        private List<CardInfo> decklist = new ArrayList<>();
 
         public PlayerState() {
         }
@@ -288,6 +324,22 @@ public class BoardState {
             this.sideboardSize = sideboardSize;
         }
 
+        public int getMulliganCount() {
+            return mulliganCount;
+        }
+
+        public void setMulliganCount(int mulliganCount) {
+            this.mulliganCount = mulliganCount;
+        }
+
+        public int getSpellsCastThisTurn() {
+            return spellsCastThisTurn;
+        }
+
+        public void setSpellsCastThisTurn(int spellsCastThisTurn) {
+            this.spellsCastThisTurn = spellsCastThisTurn;
+        }
+
         public boolean isHandHidden() {
             return handHidden;
         }
@@ -302,6 +354,22 @@ public class BoardState {
 
         public void setFocal(boolean focal) {
             isFocal = focal;
+        }
+
+        public String getOpponentId() {
+            return opponentId;
+        }
+
+        public void setOpponentId(String opponentId) {
+            this.opponentId = opponentId;
+        }
+
+        public List<CardInfo> getDecklist() {
+            return decklist;
+        }
+
+        public void setDecklist(List<CardInfo> decklist) {
+            this.decklist = decklist;
         }
     }
 
@@ -368,6 +436,9 @@ public class BoardState {
         @JsonProperty("blocking")
         private boolean blocking;
 
+        @JsonProperty("blocked")
+        private boolean blocked;
+
         @JsonProperty("flipped")
         private boolean flipped;
 
@@ -391,6 +462,9 @@ public class BoardState {
 
         @JsonProperty("revealed_to")
         private List<String> revealedTo = new ArrayList<>();
+
+        @JsonProperty("count")
+        private int count = 1;
 
         public CardInfo() {
         }
@@ -547,6 +621,14 @@ public class BoardState {
             this.blocking = blocking;
         }
 
+        public boolean isBlocked() {
+            return blocked;
+        }
+
+        public void setBlocked(boolean blocked) {
+            this.blocked = blocked;
+        }
+
         public boolean isFlipped() {
             return flipped;
         }
@@ -609,6 +691,14 @@ public class BoardState {
 
         public void setRevealedTo(List<String> revealedTo) {
             this.revealedTo = revealedTo;
+        }
+
+        public int getCount() {
+            return count;
+        }
+
+        public void setCount(int count) {
+            this.count = count;
         }
     }
 }

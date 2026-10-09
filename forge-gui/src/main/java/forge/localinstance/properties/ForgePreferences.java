@@ -197,7 +197,7 @@ public class ForgePreferences extends AbstractPreferences<ForgePreferences.FPref
         SUBMENU_UTILITIES ("false"),
 
         UI_CURRENT_AI_PROFILE ("Default"),
-        MATCH_AI_SIDEBOARDING_MODE("Human For AI"),
+        MATCH_AI_SIDEBOARDING_MODE("AI"),
         MATCH_AI_TIMEOUT("5"),
         UI_ENABLE_AI_CHEATS ("false"),
         MATCH_EXPERIMENTAL_RESTORE("false"),

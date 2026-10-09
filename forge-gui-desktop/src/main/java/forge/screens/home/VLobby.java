@@ -344,7 +344,7 @@ public class VLobby implements ILobbyView {
 
     private void updateImpl(final int slot, final LobbySlotType type) {
         final FDeckChooser deckChooser = getDeckChooser(slot);
-        deckChooser.setIsAi(type==LobbySlotType.AI);
+        deckChooser.setIsAi(type==LobbySlotType.AI || type==LobbySlotType.EXTERNAL_AI);
         DeckType selectedDeckType = deckChooser.getSelectedDeckType();
         switch (selectedDeckType){
             case STANDARD_CARDGEN_DECK:

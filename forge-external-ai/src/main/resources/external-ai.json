@@ -1,0 +1,11 @@
+{
+  "server": {
+    "url": "http://localhost:8080",
+    "timeout_ms": 30000,
+    "retry_count": 3
+  },
+  "behavior": {
+    "fallback": "PASS",
+    "strict_mode": false
+  }
+}

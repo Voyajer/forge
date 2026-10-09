@@ -8,6 +8,7 @@ import org.apache.commons.lang3.StringUtils;
 import forge.LobbyPlayer;
 import forge.ai.AIOption;
 import forge.deck.CardPool;
+import forge.externalai.LobbyPlayerExternalAi;
 import forge.deck.Deck;
 import forge.deck.DeckFormat;
 import forge.deck.DeckSection;
@@ -452,10 +453,13 @@ public abstract class GameLobby implements IHasGameType {
             final Set<AIOption> aiOptions = slot.getAiOptions(); // TODO: could AiOptions carry the choice of which AI is selected to play against?
 
             final boolean isAI = slot.getType() == LobbySlotType.AI;
+            final boolean isExternalAI = slot.getType() == LobbySlotType.EXTERNAL_AI;
             final LobbyPlayer lobbyPlayer;
             if (isAI) {
                 String aiProfileOverride = slot.getAiProfile();
                 lobbyPlayer = GamePlayerUtil.createAiPlayer(name, avatar, sleeve, aiOptions, aiProfileOverride);
+            } else if (isExternalAI) {
+                lobbyPlayer = new LobbyPlayerExternalAi(name);
             } else {
                 boolean setNameNow = false;
                 if (!hasNameBeenSet && slot.getType() == LobbySlotType.LOCAL) {
@@ -532,7 +536,7 @@ public abstract class GameLobby implements IHasGameType {
             rp.setTeamNumber(team);
             players.add(rp.setPlayer(lobbyPlayer));
 
-            if (!isAI) {
+            if (!isAI && !isExternalAI) {
                 guis.put(rp, gui);
             }
             playerToSlot.put(rp, slot);

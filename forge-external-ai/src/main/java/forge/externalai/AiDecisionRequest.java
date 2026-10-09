@@ -76,6 +76,20 @@ public class AiDecisionRequest {
         @JsonProperty("prompt")
         private String prompt;
 
+        /**
+         * Number of cards that will be tuck-returned if this mulligan is taken
+         * (London mulligan). Only set for MULLIGAN decisions; null otherwise.
+         */
+        @JsonProperty("cardsToReturn")
+        private Integer cardsToReturn;
+
+        /**
+         * How many times the focal player has already mulliganed this game.
+         * Only set for MULLIGAN decisions; null otherwise.
+         */
+        @JsonProperty("mulliganCount")
+        private Integer mulliganCount;
+
         public DecisionContext() {
         }
 
@@ -126,6 +140,22 @@ public class AiDecisionRequest {
 
         public void setPrompt(String prompt) {
             this.prompt = prompt;
+        }
+
+        public Integer getCardsToReturn() {
+            return cardsToReturn;
+        }
+
+        public void setCardsToReturn(Integer cardsToReturn) {
+            this.cardsToReturn = cardsToReturn;
+        }
+
+        public Integer getMulliganCount() {
+            return mulliganCount;
+        }
+
+        public void setMulliganCount(Integer mulliganCount) {
+            this.mulliganCount = mulliganCount;
         }
     }
 

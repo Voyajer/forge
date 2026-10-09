@@ -2,6 +2,7 @@ package forge.externalai.http;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import forge.externalai.AiDecisionRequest;
 import forge.externalai.AiDecisionResponse;
 import forge.externalai.config.ExternalAiConfig;
@@ -51,6 +52,12 @@ public class ExternalAiHttpClient {
         this.retryCount = retryCount;
         this.fallbackBehavior = fallbackBehavior;
         this.httpClient = HttpClient.newBuilder()
+                // Force HTTP/1.1: Java 25's HttpClient defaults to HTTP/2 and, for
+                // cleartext http:// URLs, sends an "Upgrade: h2c" request. uvicorn/h11
+                // does not support h2c and rejects the request with a 422 without
+                // reading the body (FastAPI reports an empty body). HTTP/1.1 avoids
+                // the upgrade entirely.
+                .version(HttpClient.Version.HTTP_1_1)
                 .connectTimeout(this.timeout)
                 .build();
         this.objectMapper = new ObjectMapper();
@@ -115,7 +122,7 @@ public class ExternalAiHttpClient {
                 break; // No point retrying deserialization errors
             } catch (IOException e) {
                 lastException = e;
-                log.warn("IO error on AI decision request (attempt {}): {}", attempt + 1, e.getMessage());
+                log.warn("IO error on AI decision request (attempt {}): {} — {}", attempt + 1, e.getClass().getSimpleName(), e.getMessage());
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
                 lastException = e;
@@ -139,9 +146,16 @@ public class ExternalAiHttpClient {
      */
     public void notifyGameStart(String gameId, String decklistJson) {
         String endpoint = baseUrl + "/game/start";
-        String body = String.format(
-                "{\"gameId\":\"%s\",\"decklist\":%s}",
-                escapeJson(gameId), decklistJson);
+        String body;
+        try {
+            ObjectNode node = objectMapper.createObjectNode();
+            node.put("gameId", gameId);
+            node.set("decklist", objectMapper.readTree(decklistJson));
+            body = objectMapper.writeValueAsString(node);
+        } catch (JsonProcessingException e) {
+            log.warn("Failed to build game-start payload: {}", e.getMessage());
+            return;
+        }
 
         HttpRequest request = HttpRequest.newBuilder()
                 .uri(URI.create(endpoint))
@@ -164,9 +178,16 @@ public class ExternalAiHttpClient {
      */
     public void notifyGameEnd(String gameId, String result) {
         String endpoint = baseUrl + "/game/end";
-        String body = String.format(
-                "{\"gameId\":\"%s\",\"result\":\"%s\"}",
-                escapeJson(gameId), escapeJson(result));
+        String body;
+        try {
+            ObjectNode node = objectMapper.createObjectNode();
+            node.put("gameId", gameId);
+            node.put("result", result);
+            body = objectMapper.writeValueAsString(node);
+        } catch (JsonProcessingException e) {
+            log.warn("Failed to build game-end payload: {}", e.getMessage());
+            return;
+        }
 
         HttpRequest request = HttpRequest.newBuilder()
                 .uri(URI.create(endpoint))
@@ -237,15 +258,6 @@ public class ExternalAiHttpClient {
             log.debug("Failed to parse AI response from non-2xx status: {}", e.getMessage());
             return null;
         }
-    }
-
-    private String escapeJson(String input) {
-        if (input == null) return "";
-        return input.replace("\\", "\\\\")
-                    .replace("\"", "\\\"")
-                    .replace("\n", "\\n")
-                    .replace("\r", "\\r")
-                    .replace("\t", "\\t");
     }
 
     public String getBaseUrl() {

@@ -25,7 +25,7 @@
         </dependency>
         <dependency>
             <groupId>forge</groupId>
-            <artifactId>forge-gui</artifactId>
+            <artifactId>forge-ai</artifactId>
             <version>${project.version}</version>
         </dependency>
         <dependency>

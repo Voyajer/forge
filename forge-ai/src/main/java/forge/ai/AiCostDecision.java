@@ -141,12 +141,21 @@ public class AiCostDecision extends CostDecisionMakerBase {
             }
             return PaymentDecision.card(differentNames);
         }
-        final AiController aic = ((PlayerControllerAi)player.getController()).getAi();
-
-        CardCollection result = aic.getCardsToDiscard(c, type.split(";"), ability, discarded);
-        if (result != null) {
-            discarded.addAll(result);
+        if (player.getController() instanceof PlayerControllerAi) {
+            final AiController aic = ((PlayerControllerAi)player.getController()).getAi();
+            CardCollection result = aic.getCardsToDiscard(c, type.split(";"), ability, discarded);
+            if (result != null) {
+                discarded.addAll(result);
+            }
+            return PaymentDecision.card(result);
         }
+        // Non-PlayerControllerAi (e.g. external AI): fall back to valid cards matching the type.
+        CardCollection valid = CardLists.getValidCards(hand, type.split(";"), player, source, ability);
+        if (valid.isEmpty()) {
+            return null;
+        }
+        CardCollection result = CardLists.getRandomSubList(new CardCollection(valid), c);
+        discarded.addAll(result);
         return PaymentDecision.card(result);
     }
 
@@ -304,9 +313,13 @@ public class AiCostDecision extends CostDecisionMakerBase {
         CardCollection food = CardLists.filter(player.getCardsIn(ZoneType.Battlefield), CardPredicates.isType("Food"), CardPredicates.canBeSacrificedBy(ability, isEffect()));
         CardCollection exile = CardLists.filter(player.getCardsIn(ZoneType.Graveyard), CardPredicates.canExiledBy(ability, isEffect()));
         if (!food.isEmpty()) {
-            final AiController aic = ((PlayerControllerAi)player.getController()).getAi();
-            CardCollectionView list = aic.chooseSacrificeType("Food", ability, isEffect(), 1, null);
-            return list == null ? null : PaymentDecision.card(list);
+            if (player.getController() instanceof PlayerControllerAi) {
+                final AiController aic = ((PlayerControllerAi)player.getController()).getAi();
+                CardCollectionView list = aic.chooseSacrificeType("Food", ability, isEffect(), 1, null);
+                return list == null ? null : PaymentDecision.card(list);
+            }
+            // Non-PlayerControllerAi (e.g. external AI): fall back to the first available Food.
+            return food.isEmpty() ? null : PaymentDecision.card(food.getFirst());
         } else {
             CardCollectionView chosen = ComputerUtil.chooseExileFromList(player, exile, source, 3, ability, isEffect());
             return null == chosen ? null : PaymentDecision.card(chosen);
@@ -503,9 +516,18 @@ public class AiCostDecision extends CostDecisionMakerBase {
 
         int c = cost.getAbilityAmount(ability);
 
-        final AiController aic = ((PlayerControllerAi)player.getController()).getAi();
-        CardCollectionView list = aic.chooseSacrificeType(cost.getType(), ability, isEffect(), c, null);
-        return list == null ? null : PaymentDecision.card(list);
+        if (player.getController() instanceof PlayerControllerAi) {
+            final AiController aic = ((PlayerControllerAi)player.getController()).getAi();
+            CardCollectionView list = aic.chooseSacrificeType(cost.getType(), ability, isEffect(), c, null);
+            return list == null ? null : PaymentDecision.card(list);
+        }
+        // Non-PlayerControllerAi (e.g. external AI): fall back to valid cards matching the type.
+        CardCollection valid = CardLists.getValidCards(player.getCardsIn(ZoneType.Battlefield), cost.getType().split(";"),
+                player, source, ability);
+        if (valid.isEmpty()) {
+            return null;
+        }
+        return PaymentDecision.card(CardLists.getRandomSubList(new CardCollection(valid), c));
     }
 
     @Override
@@ -558,8 +580,16 @@ public class AiCostDecision extends CostDecisionMakerBase {
 
         int c = cost.getAbilityAmount(ability);
 
-        final AiController aic = ((PlayerControllerAi)player.getController()).getAi();
-        return PaymentDecision.card(aic.getCardsToDiscard(c, type.split(";"), ability));
+        if (player.getController() instanceof PlayerControllerAi) {
+            final AiController aic = ((PlayerControllerAi)player.getController()).getAi();
+            return PaymentDecision.card(aic.getCardsToDiscard(c, type.split(";"), ability));
+        }
+        // Non-PlayerControllerAi (e.g. external AI): fall back to valid cards matching the type.
+        CardCollection valid = CardLists.getValidCards(hand, type.split(";"), player, source, ability);
+        if (valid.isEmpty()) {
+            return null;
+        }
+        return PaymentDecision.card(CardLists.getRandomSubList(new CardCollection(valid), c));
     }
 
     @Override

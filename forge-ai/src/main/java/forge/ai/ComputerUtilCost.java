@@ -269,10 +269,16 @@ public class ComputerUtilCost {
                     return false;
                 } else {
                     int c = part.getAbilityAmount(sourceAbility);
-                    final AiController aic = ((PlayerControllerAi)ai.getController()).getAi();
-                    CardCollectionView choices = aic.chooseSacrificeType(part.getType(), sourceAbility, effect, c, exclude);
-                    if (choices != null) {
-                        list.addAll(choices);
+                    if (ai.getController() instanceof PlayerControllerAi) {
+                        final AiController aic = ((PlayerControllerAi)ai.getController()).getAi();
+                        CardCollectionView choices = aic.chooseSacrificeType(part.getType(), sourceAbility, effect, c, exclude);
+                        if (choices != null) {
+                            list.addAll(choices);
+                        }
+                    } else {
+                        // Non-PlayerControllerAi (e.g. external AI): fall back to valid cards matching the type.
+                        list.addAll(CardLists.getValidCards(ai.getCardsIn(ZoneType.Battlefield), part.getType().split(";"),
+                                ai, sourceAbility.getHostCard(), sourceAbility));
                     }
                 }
                 list.removeAll(exclude);

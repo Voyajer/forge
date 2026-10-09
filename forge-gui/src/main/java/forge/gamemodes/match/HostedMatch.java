@@ -9,6 +9,7 @@ import com.google.common.eventbus.Subscribe;
 import forge.LobbyPlayer;
 import forge.StaticData;
 import forge.ai.AiProfileUtil;
+import forge.ai.LobbyPlayerAi;
 import forge.game.*;
 import forge.game.event.GameEvent;
 import forge.game.event.GameEventSubgameEnd;
@@ -42,6 +43,11 @@ import forge.sound.SoundSystem;
 import forge.trackable.TrackableCollection;
 import forge.util.TextUtil;
 import forge.util.collect.FCollectionView;
+import forge.deck.Deck;
+import forge.externalai.LobbyPlayerExternalAi;
+import forge.externalai.matchlog.ExternalMatchLogger;
+import forge.externalai.matchlog.GameEventRecorder;
+import forge.item.PaperCard;
 import org.apache.commons.lang3.StringUtils;
 
 import java.util.*;
@@ -64,6 +70,12 @@ public class HostedMatch {
     private final Map<PlayerControllerHuman, NextGameDecision> nextGameDecisions = Maps.newHashMap();
     private boolean isMatchOver = false;
     public int subGameCount = 0;
+
+    // Match logging (external AI server). Best-effort: if the server is down,
+    // logging is silently skipped and gameplay is unaffected.
+    private String matchId = null;
+    private ExternalMatchLogger matchLogger = null;
+    private GameEventRecorder gameRecorder = null;
 
     public HostedMatch() {}
 
@@ -142,6 +154,34 @@ public class HostedMatch {
         this.match.subscribeToEvents(HapticEngine.instance);
         this.match.subscribeToEvents(visitor);
         this.matchPlaylist = playlist;
+
+        // Set up match logging (external AI server). The whole match (all games
+        // of a Bo1/Bo3) is logged as a single replay file with per-game and
+        // match-level winners/rewards.
+        if (matchLogger != null) {
+            matchLogger.shutdown();
+            matchLogger = null;
+        }
+        this.matchId = UUID.randomUUID().toString();
+        this.matchLogger = new ExternalMatchLogger();
+        final List<String> playerNames = new ArrayList<>();
+        final Map<String, String> playerTypes = new LinkedHashMap<>();
+        for (final RegisteredPlayer rp : sortedPlayers) {
+            final String name = rp.getPlayer().getName();
+            playerNames.add(name);
+            playerTypes.put(name, classifyPlayerType(rp.getPlayer()));
+        }
+        final String formatName = gameRules.getGameType() != null ? gameRules.getGameType().toString() : "standard";
+        final int gamesToWin = gameRules.getGamesToWinMatch();
+        matchLogger.onMatchStart(matchId, playerNames, formatName, gamesToWin, playerTypes);
+        // Record sideboard actions (games 2+) as they happen in Match.prepareAllZones.
+        this.match.addSideboardListener((playerName, mainToSide, sideToMain) -> {
+            final Game g = this.game;
+            if (g != null) {
+                matchLogger.onSideboard(matchId, String.valueOf(g.getId()), playerName, mainToSide, sideToMain);
+            }
+        });
+
         startGame();
     }
 
@@ -293,9 +333,26 @@ public class HostedMatch {
                 playbackControl.setGame(currentGame);
                 currentGame.subscribeToEvents(playbackControl);
             }
+            // Notify the match logger that a new game is starting and begin
+            // recording its moves (every action + full board state).
+            if (matchLogger != null) {
+                final int gameNumber = match.getOutcomes().size() + 1;
+                final String gameId = String.valueOf(currentGame.getId());
+                matchLogger.onGameStart(matchId, gameId, gameNumber, captureDecklists());
+                gameRecorder = new GameEventRecorder(currentGame, matchId, gameId, matchLogger);
+            }
             // Actually start the game!
             match.startGame(currentGame, startGameHook);
             // this function waits?
+            // The game is over — record its outcome (winner + turns).
+            if (matchLogger != null) {
+                final String gameId = String.valueOf(currentGame.getId());
+                final GameOutcome outcome = currentGame.getOutcome();
+                final String winner = (outcome != null && outcome.getWinningLobbyPlayer() != null)
+                        ? outcome.getWinningLobbyPlayer().getName() : null;
+                final int totalTurns = outcome != null ? outcome.getLastTurnNumber() : 0;
+                matchLogger.onGameEnd(matchId, gameId, winner, totalTurns);
+            }
             if (endGameHook != null){
                 endGameHook.run();
             }
@@ -320,6 +377,13 @@ public class HostedMatch {
                     FThreads.delayInEDT(3000, () -> {
                         if (isMatchOver) {
                             // Leave match-end overview open for spectator.
+                            // Finalize the match log NOW: the QUIT path in
+                            // addNextGameDecision (which normally calls
+                            // notifyMatchEnd) never runs for Constructed
+                            // matches, so without this the match replay file
+                            // would only be written when the NEXT match
+                            // starts or the server shuts down.
+                            notifyMatchEnd();
                         } else {
                             addNextGameDecision(null, NextGameDecision.CONTINUE);
                         }
@@ -539,6 +603,7 @@ public class HostedMatch {
             FThreads.invokeInEdtNowOrLater(() -> {
                 endCurrentGame();
                 isMatchOver = true;
+                notifyMatchEnd();
                 if (onMatchOver != null) {
                     onMatchOver.run();
                 }
@@ -573,5 +638,63 @@ public class HostedMatch {
 
     public List<PlayerControllerHuman> getHumanControllers(){
         return humanControllers;
+    }
+
+    /**
+     * Capture each player's current main deck as a list of card names.
+     */
+    private Map<String, List<String>> captureDecklists() {
+        final Map<String, List<String>> decklists = new LinkedHashMap<>();
+        for (final RegisteredPlayer rp : match.getPlayers()) {
+            final List<String> names = new ArrayList<>();
+            final Deck deck = rp.getDeck();
+            if (deck != null) {
+                for (final Entry<PaperCard, Integer> e : deck.getMain()) {
+                    for (int i = 0; i < e.getValue(); i++) {
+                        names.add(e.getKey().getName());
+                    }
+                }
+            }
+            decklists.put(rp.getPlayer().getName(), names);
+        }
+        return decklists;
+    }
+
+    /**
+     * Classify a player's role for the replay file so the trainer can tell which
+     * moves were made by a human, a Forge bot, or the external AI. This is what
+     * makes every match composition (human vs human, human vs bot, bot vs bot,
+     * bot vs AI, AI vs AI) self-describing and usable for training.
+     */
+    private static String classifyPlayerType(final LobbyPlayer lp) {
+        if (lp instanceof LobbyPlayerHuman) {
+            return "human";
+        }
+        if (lp instanceof LobbyPlayerExternalAi) {
+            return "ai";
+        }
+        if (lp instanceof LobbyPlayerAi) {
+            return "bot";
+        }
+        return "unknown";
+    }
+
+    /**
+     * Notify the match logger that the match is over and finalize the match file.
+     */
+    private void notifyMatchEnd() {
+        if (matchLogger == null) {
+            return;
+        }
+        final RegisteredPlayer winner = match.getWinner();
+        final String matchWinner = (winner != null) ? winner.getPlayer().getName() : null;
+        final Map<String, Integer> finalScore = new LinkedHashMap<>();
+        for (final RegisteredPlayer rp : match.getPlayers()) {
+            finalScore.put(rp.getPlayer().getName(), match.getGamesWonBy(rp.getPlayer()));
+        }
+        final String result = match.isMatchOver() ? "completed" : "abandoned";
+        matchLogger.onMatchEnd(matchId, matchWinner, finalScore, result);
+        matchLogger.shutdown();
+        matchLogger = null;
     }
 }

@@ -40,6 +40,8 @@ public class Match {
 
     private GameOutcome lastOutcome = null;
 
+    private final List<SideboardListener> sideboardListeners = Lists.newArrayList();
+
     public Match(final GameRules rules0, final List<RegisteredPlayer> players0, final String title) {
         players = Collections.unmodifiableList(Lists.newArrayList(players0));
         rules = rules0;
@@ -48,6 +50,52 @@ public class Match {
 
     public GameRules getRules() {
         return rules;
+    }
+
+    /**
+     * Register a listener that is notified after each player sideboards between games.
+     * Used by the external AI match logger to record sideboard actions.
+     */
+    public void addSideboardListener(SideboardListener listener) {
+        sideboardListeners.add(listener);
+    }
+
+    public void removeSideboardListener(SideboardListener listener) {
+        sideboardListeners.remove(listener);
+    }
+
+    /**
+     * Listener notified after a player sideboards (between games of a match).
+     */
+    public interface SideboardListener {
+        void onSideboard(String playerName, List<String> mainToSide, List<String> sideToMain);
+    }
+
+    private static List<String> poolNames(CardPool pool) {
+        final List<String> names = new ArrayList<>();
+        if (pool == null) {
+            return names;
+        }
+        for (final Entry<PaperCard, Integer> e : pool) {
+            for (int i = 0; i < e.getValue(); i++) {
+                names.add(e.getKey().getName());
+            }
+        }
+        return names;
+    }
+
+    /**
+     * Returns the cards in {@code from} that are not present in {@code to} (multiset diff by name).
+     */
+    private static List<String> diffNames(List<String> from, List<String> to) {
+        final List<String> remaining = new ArrayList<>(to);
+        final List<String> result = new ArrayList<>();
+        for (final String name : from) {
+            if (!remaining.remove(name)) {
+                result.add(name);
+            }
+        }
+        return result;
     }
     String getTitle() {
         final Multiset<RegisteredPlayer> wins = getGamesWon();
@@ -258,6 +306,10 @@ public class Match {
                 }
 
                 Deck toChange = psc.getDeck();
+                // Capture the deck before sideboarding so we can report the
+                // main<->side changes to listeners (external AI match logger).
+                final List<String> mainBefore = poolNames(toChange.getMain());
+                final List<String> sideBefore = poolNames(toChange.get(DeckSection.Sideboard));
                 if (!getRemovedCards().isEmpty()) {
                     CardPool main = new CardPool();
                     main.addAll(toChange.get(DeckSection.Main));
@@ -287,6 +339,14 @@ public class Match {
                     toChange.getMain().add(newMain);
                     toChange.get(DeckSection.Sideboard).clear();
                     toChange.get(DeckSection.Sideboard).addAll(allCards);
+                }
+
+                // Notify sideboard listeners with the cards that moved between
+                // the main deck and the sideboard for this player.
+                final List<String> mainToSide = diffNames(mainBefore, poolNames(toChange.getMain()));
+                final List<String> sideToMain = diffNames(sideBefore, poolNames(toChange.get(DeckSection.Sideboard)));
+                for (final SideboardListener listener : sideboardListeners) {
+                    listener.onSideboard(player.getName(), mainToSide, sideToMain);
                 }
             }
 
